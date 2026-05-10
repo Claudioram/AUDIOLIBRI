@@ -232,6 +232,10 @@ def normalise_punctuation(text: str) -> str:
 def collapse_whitespace(text: str) -> str:
     text = _MULTIPLE_SPACES.sub(" ", text)
     text = _MULTIPLE_NEWLINES.sub("\n\n", text)
+    # Single newlines are PDF line-wrapping artifacts — collapse to space
+    # so MiniMax doesn't insert a prosodic pause mid-sentence
+    text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
+    text = _MULTIPLE_SPACES.sub(" ", text)
     return text
 
 
