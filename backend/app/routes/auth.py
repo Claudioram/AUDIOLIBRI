@@ -6,12 +6,14 @@ from app.auth import (
     create_access_token,
     get_current_user,
 )
+from app.config import settings
 from app.models.schemas import LoginRequest, LoginResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 _COOKIE_NAME = "audiobook_session"
 _COOKIE_MAX_AGE = 720 * 3600  # 30 days
+_SECURE_COOKIE = settings.domain not in ("localhost", "127.0.0.1")
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -27,8 +29,8 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Log
         key=_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=True,
-        samesite="strict",
+        secure=_SECURE_COOKIE,
+        samesite="lax",
         max_age=_COOKIE_MAX_AGE,
     )
     return LoginResponse(ok=True)
