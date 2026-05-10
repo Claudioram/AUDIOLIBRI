@@ -231,13 +231,43 @@ class MinimaxAPIClient:
         return url
 
     async def _download_file(self, url: str, dest: Path) -> None:
+        import tarfile
+        import tempfile
+
         dest.parent.mkdir(parents=True, exist_ok=True)
+
+        # Download to a temp file first so we can inspect/extract if needed
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".download") as tmp:
+            tmp_path = Path(tmp.name)
+
         async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
             async with client.stream("GET", url) as resp:
                 resp.raise_for_status()
-                with open(dest, "wb") as f:
+                with open(tmp_path, "wb") as f:
                     async for chunk in resp.aiter_bytes(chunk_size=65536):
                         f.write(chunk)
+
+        # MiniMax returns a .tar archive containing the audio file — extract it
+        if tarfile.is_tarfile(tmp_path):
+            with tarfile.open(tmp_path) as tar:
+                audio_members = [
+                    m for m in tar.getmembers()
+                    if m.name.lower().endswith((".mp3", ".wav", ".aac", ".m4a"))
+                ]
+                if not audio_members:
+                    raise MinimaxError("tar archive contains no audio file")
+                # Pick the largest audio file (the actual speech, not metadata)
+                audio_member = max(audio_members, key=lambda m: m.size)
+                extracted = tar.extractfile(audio_member)
+                if extracted is None:
+                    raise MinimaxError(f"Could not read {audio_member.name} from tar")
+                dest.write_bytes(extracted.read())
+                logger.debug(f"Extracted {audio_member.name} from tar ({audio_member.size // 1024} KB)")
+        else:
+            # Plain audio file — just move it
+            tmp_path.rename(dest)
+
+        tmp_path.unlink(missing_ok=True)
         logger.info(f"Downloaded audio to {dest} ({dest.stat().st_size / 1024:.1f} KB)")
 
     # ── Voice listing ──────────────────────────────────────────────────────────

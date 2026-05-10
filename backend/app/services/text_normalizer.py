@@ -127,7 +127,9 @@ def normalize_for_tts(text: str) -> str:
     text = roman_numerals_to_words(text)
     text = normalise_punctuation(text)
     text = collapse_whitespace(text)
-    text = add_paragraph_pauses(text)
+    # NOTE: pause markers (<#0.8#>) removed — MiniMax speech-02-hd reads them
+    # as literal text instead of inserting silence. Natural \n\n paragraph
+    # breaks already produce correct prosodic pauses in this model.
     return text.strip()
 
 
