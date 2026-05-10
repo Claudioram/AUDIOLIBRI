@@ -18,11 +18,13 @@ htmlcov/
 !.env.example
 
 # Storage (volumes — never commit audio/PDF data)
-storage/pdfs/
-storage/audio/
-storage/m4b/
-storage/reference/
+storage/pdfs/*
+storage/audio/*
+storage/m4b/*
+storage/reference/*
+storage/test_audio/
 data/
+!storage/**/.gitkeep
 
 # Traefik
 letsencrypt/
