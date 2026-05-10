@@ -1,0 +1,39 @@
+version: '3.9'
+
+# Development override: no Traefik, exposes ports directly, hot-reload
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      - STORAGE_PATH=./storage
+      - DATA_PATH=./data
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+      - ./storage:/app/storage
+      - ./data:/app/data
+      - ./frontend:/app/frontend:ro
+    depends_on:
+      - redis
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: ./backend
+    env_file: .env
+    environment:
+      - STORAGE_PATH=./storage
+      - DATA_PATH=./data
+    volumes:
+      - ./backend/app:/app/app
+      - ./storage:/app/storage
+      - ./data:/app/data
+    depends_on:
+      - redis
+    command: python -m app.workers.worker

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audiolibri — Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <div class="container inner">
+      <span class="logo">Audiolibri</span>
+      <button class="btn btn-secondary btn-sm" id="logoutBtn">Esci</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <div class="page-header">
+        <h1>I tuoi libri</h1>
+        <button class="btn btn-primary" id="uploadBtn">+ Carica PDF</button>
+      </div>
+
+      <!-- Drop zone (hidden until button clicked) -->
+      <div class="drop-zone" id="dropZone" style="display:none">
+        <div>Trascina qui il tuo PDF oppure</div>
+        <p>clicca per selezionare il file</p>
+        <input type="file" id="fileInput" accept=".pdf" style="display:none">
+      </div>
+
+      <!-- Upload progress -->
+      <div id="uploadProgress" style="display:none; margin-bottom:20px">
+        <div class="progress-wrap">
+          <div class="progress-bar" id="uploadBar" style="width:0%"></div>
+        </div>
+        <p style="font-size:13px; color:var(--muted); margin-top:6px" id="uploadStatus">Caricamento…</p>
+      </div>
+
+      <!-- Book grid -->
+      <div class="book-grid" id="bookGrid">
+        <div class="empty-state" id="emptyState">
+          <h3>Nessun libro ancora</h3>
+          <p>Carica un PDF per iniziare.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

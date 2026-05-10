@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audiolibri — Libro</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <div class="container inner">
+      <a class="logo" href="/app.html">← Audiolibri</a>
+      <button class="btn btn-secondary btn-sm" id="logoutBtn">Esci</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <!-- Book header -->
+      <div id="bookHeader" style="margin-bottom:28px">
+        <div class="page-header">
+          <h1 id="bookTitle">Caricamento…</h1>
+          <div style="display:flex; gap:8px">
+            <button class="btn btn-primary" id="generateBtn" style="display:none">
+              Genera audiolibro
+            </button>
+            <a class="btn btn-secondary" id="downloadBtn" style="display:none" href="#">
+              Scarica M4B
+            </a>
+            <button class="btn btn-danger btn-sm" id="deleteBtn">Elimina</button>
+          </div>
+        </div>
+        <div class="meta-row" id="bookMeta"></div>
+      </div>
+
+      <!-- Chapter list -->
+      <div id="chapterSection">
+        <h2 style="font-size:1rem; font-weight:600; margin-bottom:12px">Capitoli</h2>
+        <div class="chapter-list" id="chapterList">
+          <div class="empty-state"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Text edit modal -->
+  <div class="modal-overlay" id="textModal">
+    <div class="modal">
+      <h2>Modifica testo — <span id="modalChapterTitle"></span></h2>
+      <div class="form-group">
+        <textarea id="modalTextarea" rows="14" spellcheck="false"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="modalCancel">Annulla</button>
+        <button class="btn btn-primary" id="modalSave">Salva</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sticky player -->
+  <div class="player-bar" id="playerBar">
+    <span class="now-playing" id="nowPlaying"></span>
+    <audio id="stickyAudio" controls></audio>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/player.js"></script>
+  <script src="/js/book.js"></script>
+</body>
+</html>

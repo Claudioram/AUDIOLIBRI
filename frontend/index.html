@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audiolibri — Accesso</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-box">
+      <h1>Audiolibri</h1>
+      <p class="subtitle">Accedi per gestire i tuoi audiolibri.</p>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" autocomplete="current-password"
+                 placeholder="••••••••" autofocus required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%" id="submitBtn">
+          Accedi
+        </button>
+        <p class="error-msg" id="errorMsg" style="display:none"></p>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+/* ── Reset & variables ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #f5f4f0;
+  --surface:   #ffffff;
+  --border:    #e2e0da;
+  --text:      #1a1916;
+  --muted:     #6b6860;
+  --accent:    #2d5be3;
+  --accent-h:  #1e3fb0;
+  --danger:    #c0392b;
+  --success:   #27ae60;
+  --warning:   #e67e22;
+  --radius:    8px;
+  --shadow:    0 1px 3px rgba(0,0,0,.08), 0 1px 8px rgba(0,0,0,.04);
+  --font:      system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 0;
+  position: sticky; top: 0; z-index: 10;
+}
+header .inner {
+  display: flex; align-items: center; justify-content: space-between;
+}
+header .logo { font-weight: 700; font-size: 1.1rem; letter-spacing: -0.01em; }
+
+main { padding: 32px 0 80px; }
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; border-radius: var(--radius);
+  font-size: 14px; font-weight: 500; cursor: pointer;
+  border: 1px solid transparent; transition: background .15s, border-color .15s;
+  font-family: var(--font);
+}
+.btn-primary   { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-h); }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn-secondary:hover { background: var(--bg); }
+.btn-danger    { background: var(--danger); color: #fff; }
+.btn-danger:hover { opacity: .9; }
+.btn-sm        { padding: 5px 12px; font-size: 13px; }
+.btn:disabled  { opacity: .5; cursor: not-allowed; }
+
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow);
+}
+
+/* ── Badge / status ─────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block; padding: 2px 9px; border-radius: 20px;
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
+}
+.badge-parsing, .badge-uploading { background: #fef3c7; color: #92400e; }
+.badge-ready_to_generate          { background: #dbeafe; color: #1e40af; }
+.badge-generating                 { background: #e0e7ff; color: #3730a3; }
+.badge-completed                  { background: #d1fae5; color: #065f46; }
+.badge-failed                     { background: #fee2e2; color: #991b1b; }
+.badge-pending                    { background: #f3f4f6; color: #374151; }
+
+/* ── Progress bar ───────────────────────────────────────────────────────── */
+.progress-wrap { background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; }
+.progress-bar  { background: var(--accent); height: 100%; transition: width .4s; }
+
+/* ── Login page ─────────────────────────────────────────────────────────── */
+.login-wrap {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+}
+.login-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 40px; width: 100%; max-width: 380px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.07);
+}
+.login-box h1 { font-size: 1.4rem; margin-bottom: 8px; }
+.login-box p.subtitle { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+
+/* ── Form ───────────────────────────────────────────────────────────────── */
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.form-group input, .form-group textarea {
+  width: 100%; padding: 9px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); font-size: 14px; font-family: var(--font);
+  transition: border-color .15s;
+}
+.form-group input:focus, .form-group textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+.form-group textarea { resize: vertical; min-height: 120px; }
+.error-msg { color: var(--danger); font-size: 13px; margin-top: 8px; }
+
+/* ── Drop zone ──────────────────────────────────────────────────────────── */
+.drop-zone {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 40px; text-align: center; cursor: pointer;
+  transition: border-color .15s, background .15s;
+  margin-bottom: 24px;
+}
+.drop-zone.drag-over { border-color: var(--accent); background: #eff3fd; }
+.drop-zone p { color: var(--muted); font-size: 14px; margin-top: 8px; }
+
+/* ── Book list ──────────────────────────────────────────────────────────── */
+.book-grid { display: grid; gap: 16px; }
+
+.book-card {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 18px 20px; cursor: pointer; transition: border-color .15s;
+}
+.book-card:hover { border-color: var(--accent); }
+
+.book-meta h3 { font-size: 1rem; font-weight: 600; margin-bottom: 3px; }
+.book-meta p  { color: var(--muted); font-size: 13px; }
+
+.book-actions { margin-left: auto; display: flex; gap: 8px; flex-shrink: 0; }
+
+/* ── Chapter list ───────────────────────────────────────────────────────── */
+.chapter-list { display: flex; flex-direction: column; gap: 10px; }
+
+.chapter-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface);
+}
+.chapter-num {
+  font-size: 13px; font-weight: 600; color: var(--muted);
+  min-width: 28px; text-align: center;
+}
+.chapter-info { flex: 1; min-width: 0; }
+.chapter-info h4 { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chapter-info span { font-size: 12px; color: var(--muted); }
+.chapter-audio { width: 220px; flex-shrink: 0; }
+.chapter-audio audio { width: 100%; height: 32px; }
+
+/* ── Sticky bottom player ───────────────────────────────────────────────── */
+.player-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 12px 20px; display: flex; align-items: center; gap: 16px;
+  box-shadow: 0 -2px 12px rgba(0,0,0,.06);
+  display: none;
+}
+.player-bar.visible { display: flex; }
+.player-bar audio { flex: 1; height: 36px; }
+.player-bar .now-playing { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+
+/* ── Modal ──────────────────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+  display: none;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border-radius: 12px; padding: 28px;
+  width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,.15);
+}
+.modal h2 { font-size: 1.1rem; margin-bottom: 16px; }
+.modal-footer { margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ── Misc ───────────────────────────────────────────────────────────────── */
+.page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 24px;
+}
+.page-header h1 { font-size: 1.5rem; font-weight: 700; }
+
+.meta-row { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.meta-row .item { font-size: 13px; color: var(--muted); }
+.meta-row .item strong { color: var(--text); }
+
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty-state {
+  text-align: center; padding: 60px 20px; color: var(--muted);
+}
+.empty-state h3 { font-size: 1rem; margin-bottom: 8px; color: var(--text); }
