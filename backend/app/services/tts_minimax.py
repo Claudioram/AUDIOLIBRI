@@ -141,7 +141,7 @@ class MinimaxAPIClient:
 
         for attempt in range(1, 4):
             try:
-                async with httpx.AsyncClient(timeout=60) as client:
+                async with httpx.AsyncClient(timeout=60, verify=False) as client:
                     resp = await client.post(
                         f"{_BASE_URL}/t2a_async_v2",
                         headers=self._headers,
@@ -181,7 +181,7 @@ class MinimaxAPIClient:
         for attempt in range(_POLL_MAX_ATTEMPTS):
             await asyncio.sleep(_POLL_INTERVAL_SEC)
 
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=30, verify=False) as client:
                 resp = await client.get(
                     f"{_BASE_URL}/query/t2a_async_query_v2",
                     headers=self._headers,
@@ -210,7 +210,7 @@ class MinimaxAPIClient:
 
     async def _get_file_url(self, file_id: str) -> str:
         """Resolve a file_id to a download URL."""
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, verify=False) as client:
             resp = await client.get(
                 f"{_BASE_URL}/files/retrieve",
                 headers=self._headers,
@@ -240,7 +240,7 @@ class MinimaxAPIClient:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".download") as tmp:
             tmp_path = Path(tmp.name)
 
-        async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=300, follow_redirects=True, verify=False) as client:
             async with client.stream("GET", url) as resp:
                 resp.raise_for_status()
                 with open(tmp_path, "wb") as f:
@@ -274,7 +274,7 @@ class MinimaxAPIClient:
 
     async def list_voices(self) -> list[dict]:
         """List available custom voices for this group."""
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, verify=False) as client:
             resp = await client.get(
                 f"{_BASE_URL}/voice_clone/list",
                 headers=self._headers,

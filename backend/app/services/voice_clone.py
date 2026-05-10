@@ -49,7 +49,7 @@ async def clone_voice(
     # Step 1: Upload the audio file
     logger.info(f"Uploading reference voice: {audio_path.name}")
     with open(audio_path, "rb") as f:
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=120, verify=False) as client:
             upload_resp = await client.post(
                 f"{_BASE_URL}/files/upload",
                 headers=headers,
@@ -70,16 +70,17 @@ async def clone_voice(
         raise VoiceCloneError(f"No file_id in upload response: {upload_data}")
 
     # Step 2: Create the cloned voice
-    logger.info(f"Creating cloned voice '{voice_name}' from file_id={file_id}")
+    voice_id_slug = _slugify(voice_name)
+    logger.info(f"Creating cloned voice '{voice_name}' (id={voice_id_slug}) from file_id={file_id}")
     payload = {
-        "file_id": file_id,
-        "voice_id": _slugify(voice_name),
+        "file_id": int(file_id),  # MiniMax requires integer file_id
+        "voice_id": voice_id_slug,
         "name": voice_name,
     }
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, verify=False) as client:
         clone_resp = await client.post(
-            f"{_BASE_URL}/voice_clone/create",
+            f"{_BASE_URL}/voice_clone",
             headers={**headers, "Content-Type": "application/json"},
             params={"GroupId": group_id},
             json=payload,
@@ -96,7 +97,7 @@ async def clone_voice(
     voice_id = (
         clone_data.get("voice_id")
         or clone_data.get("id")
-        or payload["voice_id"]
+        or voice_id_slug
     )
 
     logger.info(f"Voice cloned successfully: voice_id={voice_id}")
@@ -116,7 +117,7 @@ async def list_voices(
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, verify=False) as client:
         resp = await client.get(
             f"{_BASE_URL}/voice_clone/list",
             headers=headers,
