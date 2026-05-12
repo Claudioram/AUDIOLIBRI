@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 
+    # Hetzner Cloud
+    hetzner_api_key: str = ""
+
     # Domain
     domain: str = "localhost"
     acme_email: str = "admin@example.com"

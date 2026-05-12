@@ -41,6 +41,9 @@ dependencies = [
     "rq>=1.16.2",
     "redis>=5.0.6",
 
+    # Hetzner Cloud
+    "hcloud>=2.0.0",
+
     # Logging
     "loguru>=0.7.2",
 

@@ -16,6 +16,7 @@ from app.routes import auth as auth_router
 from app.routes import books as books_router
 from app.routes import chapters as chapters_router
 from app.routes import audio as audio_router
+from app.routes import hetzner as hetzner_router
 
 
 @asynccontextmanager
@@ -49,6 +50,7 @@ app.include_router(auth_router.router)
 app.include_router(books_router.router)
 app.include_router(chapters_router.router)
 app.include_router(audio_router.router)
+app.include_router(hetzner_router.router)
 
 
 @app.get("/api/health")
