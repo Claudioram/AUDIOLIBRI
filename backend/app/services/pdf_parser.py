@@ -161,30 +161,27 @@ def _chapters_from_minimax(doc) -> list[Chapter]:
     if not settings.minimax_api_key:
         return []
 
-    # Costruisce il testo completo del PDF con marcatori di pagina
+    # Per ogni pagina invia le prime 5 righe non vuote — abbastanza per
+    # riconoscere titoli di capitolo su tutto il documento senza superare i limiti di token.
     pages: list[str] = []
     for page_num in range(doc.page_count):
-        text = doc[page_num].get_text().strip()
-        if text:
-            pages.append(f"[PAGINA {page_num + 1}]\n{text}")
+        lines = [l.strip() for l in doc[page_num].get_text().splitlines() if l.strip()]
+        if lines:
+            excerpt = "\n".join(lines[:5])
+            pages.append(f"[PAGINA {page_num + 1}]\n{excerpt}")
 
     if not pages:
         return []
 
     full_text = "\n\n".join(pages)
-
-    # Se il testo supera ~400k caratteri, invia le prime 300 pagine (evita timeout)
-    MAX_CHARS = 400_000
-    if len(full_text) > MAX_CHARS:
-        full_text = full_text[:MAX_CHARS]
-        logger.info(f"PDF text truncated to {MAX_CHARS} chars for MiniMax analysis")
+    logger.info(f"Sending {len(full_text):,} chars ({doc.page_count} pages) to MiniMax for chapter detection")
 
     prompt = (
-        "Analizza il testo completo di questo libro PDF. "
+        "Analizza la struttura di questo libro PDF. "
+        "Per ogni pagina vedi le prime righe del contenuto (marcate con [PAGINA N]).\n"
         "Identifica TUTTI i capitoli veri del libro (non sottosezioni, non pagine di indice, "
         "non copyright, non dediche, non note a piè di pagina).\n"
-        "Per ogni capitolo indica il titolo esatto e il numero di pagina dove inizia "
-        "(i numeri di pagina sono indicati dai marcatori [PAGINA N]).\n"
+        "Per ogni capitolo indica il titolo esatto e il numero di pagina dove inizia.\n"
         "Rispondi ESCLUSIVAMENTE con un array JSON valido, senza testo aggiuntivo:\n"
         '[{"titolo": "Nome capitolo", "pagina": N}, ...]\n\n'
         f"{full_text}"
