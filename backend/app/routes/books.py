@@ -6,10 +6,17 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
+from pydantic import BaseModel
+
 from app.auth import get_current_user
 from app.config import settings
 from app.database import Book, BookStatus, Chapter, ChapterStatus, Job, JobStatus, JobType, get_session
 from app.models.schemas import BookDetail, BookRead
+
+
+class BookUpdate(BaseModel):
+    title: str | None = None
+    author: str | None = None
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
@@ -97,6 +104,49 @@ def get_book(
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     return BookDetail.model_validate(book)
+
+
+@router.patch("/{book_id}", response_model=BookRead)
+def update_book(
+    book_id: str,
+    body: BookUpdate,
+    session: Session = Depends(get_session),
+    user: dict = Depends(get_current_user),
+) -> BookRead:
+    book = session.get(Book, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if body.title is not None:
+        book.title = body.title.strip() or book.title
+    if body.author is not None:
+        book.author = body.author.strip() or None
+    session.commit()
+    session.refresh(book)
+    return BookRead.model_validate(book)
+
+
+@router.get("/{book_id}/chapters/{chapter_id}/audio")
+def download_chapter_audio(
+    book_id: str,
+    chapter_id: str,
+    session: Session = Depends(get_session),
+    user: dict = Depends(get_current_user),
+) -> FileResponse:
+    chapter = session.get(Chapter, chapter_id)
+    if not chapter or chapter.book_id != book_id:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    if chapter.status != ChapterStatus.completed or not chapter.audio_path:
+        raise HTTPException(status_code=404, detail="Audio not available")
+
+    audio_path = settings.storage_path / chapter.audio_path
+    if not audio_path.exists():
+        raise HTTPException(status_code=404, detail="Audio file not found on disk")
+
+    book = session.get(Book, book_id)
+    safe_title = "".join(c for c in (book.title if book else "libro") if c.isalnum() or c in " _-")[:60]
+    filename = f"{safe_title} - Cap.{chapter.order:02d} {chapter.title[:40]}.mp3"
+    filename = "".join(c for c in filename if c.isalnum() or c in " _-.")
+    return FileResponse(path=str(audio_path), media_type="audio/mpeg", filename=filename)
 
 
 @router.delete("/{book_id}", status_code=204)

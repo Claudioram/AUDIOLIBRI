@@ -15,14 +15,15 @@ const bookId = new URLSearchParams(window.location.search).get('id');
 if (!bookId) { window.location = '/app.html'; }
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────
-const bookTitle       = document.getElementById('bookTitle');
-const bookMeta        = document.getElementById('bookMeta');
-const generateBtn     = document.getElementById('generateBtn');
-const downloadBtn     = document.getElementById('downloadBtn');
-const deleteBtn       = document.getElementById('deleteBtn');
-const chapterList     = document.getElementById('chapterList');
-const genProgress     = document.getElementById('genProgress');
-const genProgressBar  = document.getElementById('genProgressBar');
+const bookTitle        = document.getElementById('bookTitle');
+const editTitleBtn     = document.getElementById('editTitleBtn');
+const bookMeta         = document.getElementById('bookMeta');
+const generateBtn      = document.getElementById('generateBtn');
+const downloadBtn      = document.getElementById('downloadBtn');
+const deleteBtn        = document.getElementById('deleteBtn');
+const chapterList      = document.getElementById('chapterList');
+const genProgress      = document.getElementById('genProgress');
+const genProgressBar   = document.getElementById('genProgressBar');
 const genProgressLabel = document.getElementById('genProgressLabel');
 
 // ── Load book ────────────────────────────────────────────────────────────────
@@ -77,6 +78,7 @@ function _renderChapters(chapters) {
       <span class="badge badge-${ch.status}">${_chapterStatusLabel(ch.status)}</span>
       ${ch.status === 'completed' ? `
         <button class="btn btn-secondary btn-sm" onclick="playChapter('${ch.id}', '${_esc(ch.title).replace(/'/g, "\\'")}')">▶ Play</button>
+        <a class="btn btn-secondary btn-sm" href="/api/books/${bookId}/chapters/${ch.id}/audio" download>⬇ Scarica</a>
       ` : ''}
       <button class="btn btn-secondary btn-sm" onclick="_openEditModal('${ch.id}', '${_esc(ch.title).replace(/'/g, "\\'")}')">Modifica</button>
       ${ch.status === 'completed' || ch.status === 'failed' ? `
@@ -121,6 +123,44 @@ function _updateProgress(book) {
   genProgressLabel.textContent = `${done} di ${total} capitoli${failed ? ` (${failed} errori)` : ''}${etaText}`;
   genProgress.style.display = 'block';
 }
+
+// ── Edit title ────────────────────────────────────────────────────────────────
+editTitleBtn.addEventListener('click', () => {
+  const current = bookTitle.textContent;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = current;
+  input.style.cssText = 'font-size:inherit; font-weight:inherit; border:1px solid var(--border); border-radius:6px; padding:2px 8px; width:100%; max-width:500px';
+
+  bookTitle.replaceWith(input);
+  editTitleBtn.style.display = 'none';
+  input.focus();
+  input.select();
+
+  async function _save() {
+    const newTitle = input.value.trim();
+    const h1 = document.createElement('h1');
+    h1.id = 'bookTitle';
+    h1.style.cssText = 'margin:0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap';
+    h1.textContent = newTitle || current;
+    input.replaceWith(h1);
+    editTitleBtn.style.display = '';
+
+    if (newTitle && newTitle !== current) {
+      await api(`/api/books/${bookId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title: newTitle }),
+      });
+      document.title = `${newTitle} — Audiolibri`;
+    }
+  }
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') _save();
+    if (e.key === 'Escape') { input.value = current; _save(); }
+  });
+  input.addEventListener('blur', _save);
+});
 
 // ── Generate ─────────────────────────────────────────────────────────────────
 generateBtn.addEventListener('click', async () => {
