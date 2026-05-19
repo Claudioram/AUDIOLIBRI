@@ -49,8 +49,18 @@ _FRONT_MATTER_TITLES = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+_FRONT_MATTER_TOC = re.compile(
+    r"^\s*(Indice|Sommario|Table of Contents|Prefazione|Introduzione|"
+    r"Ringraziamenti|Dedica|Colophon|Copyright|Copertina|Appendice|Bibliography|"
+    r"Note|Glossario|Index)\s*$",
+    re.IGNORECASE,
+)
+
 _FOOTNOTE_LINE = re.compile(r"^\s*\d{1,3}\s+\S")
 _HYPHEN_BREAK = re.compile(r"(\w+)-\n(\w+)")
+
+_MIN_CHAPTER_CHARS = 800   # capitoli con meno caratteri vengono uniti al successivo
+_MAX_SANE_CHAPTERS = 60    # oltre questo numero il risultato è quasi certamente rumore
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -145,26 +155,63 @@ def _extract_chapters(doc) -> list[Chapter]:
     return _chapters_from_regex(doc)
 
 
+def _merge_short_chapters(chapters: list[Chapter]) -> list[Chapter]:
+    """Merge chapters shorter than _MIN_CHAPTER_CHARS into the next chapter."""
+    if not chapters:
+        return chapters
+
+    merged: list[Chapter] = []
+    i = 0
+    while i < len(chapters):
+        ch = chapters[i]
+        # Absorb all following short chapters
+        while ch.char_count < _MIN_CHAPTER_CHARS and i + 1 < len(chapters):
+            nxt = chapters[i + 1]
+            ch = Chapter(
+                order=ch.order,
+                title=ch.title,
+                raw_text=ch.raw_text + "\n" + nxt.raw_text,
+                start_page=ch.start_page,
+                end_page=nxt.end_page,
+            )
+            i += 1
+        merged.append(ch)
+        i += 1
+
+    # Re-number
+    for idx, ch in enumerate(merged, 1):
+        ch.order = idx
+
+    return merged
+
+
 def _chapters_from_toc(doc, toc: list) -> list[Chapter]:
-    """Build chapters from PyMuPDF TOC entries (level-1 only)."""
-    # Normalise: keep only depth-1 entries (or shallowest available)
-    min_level = min(entry[0] for entry in toc)
-    top_entries = [e for e in toc if e[0] == min_level]
+    """Build chapters from PyMuPDF TOC — picks the level that yields 2..50 real chapters."""
+    levels = sorted({entry[0] for entry in toc})
 
-    # Validate: check that page numbers land somewhere reasonable
-    validated: list[tuple[str, int]] = []
-    for entry in top_entries:
-        _, title, page = entry[0], entry[1], entry[2]
-        page_idx = max(0, page - 1)  # fitz is 0-indexed
-        if page_idx < doc.page_count:
-            validated.append((title, page_idx))
+    best_entries: list[tuple[str, int]] = []
+    for level in levels:
+        candidates = [e for e in toc if e[0] == level]
+        validated: list[tuple[str, int]] = []
+        for entry in candidates:
+            title, page = entry[1], entry[2]
+            if _FRONT_MATTER_TOC.match(title.strip()):
+                continue
+            page_idx = max(0, page - 1)
+            if page_idx < doc.page_count:
+                validated.append((title.strip(), page_idx))
 
-    if len(validated) < 2:
+        if 2 <= len(validated) <= _MAX_SANE_CHAPTERS:
+            best_entries = validated
+            logger.debug(f"TOC level {level} → {len(validated)} chapters")
+            break
+
+    if len(best_entries) < 2:
         return []
 
     chapters: list[Chapter] = []
-    for i, (title, start_page) in enumerate(validated):
-        end_page = validated[i + 1][1] - 1 if i + 1 < len(validated) else doc.page_count - 1
+    for i, (title, start_page) in enumerate(best_entries):
+        end_page = best_entries[i + 1][1] - 1 if i + 1 < len(best_entries) else doc.page_count - 1
         end_page = max(start_page, end_page)
 
         raw_text = _extract_page_range(doc, start_page, end_page)
@@ -172,18 +219,17 @@ def _chapters_from_toc(doc, toc: list) -> list[Chapter]:
 
         chapters.append(Chapter(
             order=i + 1,
-            title=title.strip(),
+            title=title,
             raw_text=raw_text,
             start_page=start_page,
             end_page=end_page,
         ))
 
-    return chapters
+    return _merge_short_chapters(chapters)
 
 
 def _chapters_from_font_heuristic(doc) -> list[Chapter]:
-    """Detect chapter headings by font size distribution."""
-    # Collect all text spans with their font sizes
+    """Detect chapter headings by font size — uses only the top 1% of sizes."""
     all_sizes: list[float] = []
     for page in doc:
         for block in page.get_text("dict")["blocks"]:
@@ -191,31 +237,42 @@ def _chapters_from_font_heuristic(doc) -> list[Chapter]:
                 continue
             for line in block.get("lines", []):
                 for span in line.get("spans", []):
-                    all_sizes.append(span["size"])
+                    if span["text"].strip():
+                        all_sizes.append(span["size"])
 
     if not all_sizes:
         return []
 
     all_sizes.sort()
-    p95 = all_sizes[int(len(all_sizes) * 0.95)]
+    body_size = all_sizes[int(len(all_sizes) * 0.50)]  # median = corpo testo
     p99 = all_sizes[int(len(all_sizes) * 0.99)]
+
+    # Heading deve essere significativamente più grande del corpo
+    heading_threshold = max(body_size * 1.25, p99 * 0.95)
 
     heading_pages: list[tuple[str, int]] = []
     for page_num, page in enumerate(doc):
+        page_text = page.get_text().strip()
+        # Salta pagine con pochissimo testo (copertina, pagina vuota)
+        if len(page_text) < 50:
+            continue
         for block in page.get_text("dict")["blocks"]:
             if block.get("type") != 0:
                 continue
             for line in block.get("lines", []):
-                text = " ".join(s["text"] for s in line.get("spans", []))
+                text = " ".join(s["text"] for s in line.get("spans", [])).strip()
                 sizes = [s["size"] for s in line.get("spans", []) if s["text"].strip()]
-                if not sizes:
+                if not sizes or not text:
                     continue
                 avg_size = sum(sizes) / len(sizes)
-                if p95 <= avg_size <= p99 * 1.1 and 3 <= len(text.strip()) <= 120:
-                    heading_pages.append((text.strip(), page_num))
-                    break  # one heading per page check is enough
+                # Solo righe corte con font grande e non front matter
+                if (avg_size >= heading_threshold
+                        and 3 <= len(text) <= 80
+                        and not _FRONT_MATTER_TOC.match(text)):
+                    heading_pages.append((text, page_num))
+                    break
 
-    # Deduplicate consecutive same-page headings
+    # Deduplica per pagina
     seen_pages: set[int] = set()
     deduped: list[tuple[str, int]] = []
     for title, pg in heading_pages:
@@ -223,7 +280,7 @@ def _chapters_from_font_heuristic(doc) -> list[Chapter]:
             deduped.append((title, pg))
             seen_pages.add(pg)
 
-    if len(deduped) < 2:
+    if len(deduped) < 2 or len(deduped) > _MAX_SANE_CHAPTERS:
         return []
 
     chapters: list[Chapter] = []
@@ -242,7 +299,7 @@ def _chapters_from_font_heuristic(doc) -> list[Chapter]:
             end_page=end_page,
         ))
 
-    return chapters
+    return _merge_short_chapters(chapters)
 
 
 def _chapters_from_regex(doc) -> list[Chapter]:
@@ -284,7 +341,7 @@ def _chapters_from_regex(doc) -> list[Chapter]:
             end_page=end_page,
         ))
 
-    return chapters
+    return _merge_short_chapters(chapters)
 
 
 def _extract_page_range(doc, start: int, end: int) -> str:
