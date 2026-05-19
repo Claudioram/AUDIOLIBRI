@@ -1,42 +1,112 @@
-name: Deploy to Hetzner
+name: Deploy to OPENCLAW
 
 on:
   workflow_dispatch:
   push:
     branches: [claude/audiobook-generator-setup-WgvfR]
+    paths-ignore:
+      - 'storage/**'
+      - '**.md'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HOST: 135.181.32.65
+      SSH_PASS: kKgkWFccreNw
+      APP_PASSWORD: audiobook2025
+      JWT_SECRET: f2c9f0c3cc4bcca4a3b88b6b9fcc961aa9530de8501df4ffcacc842450d49fad
+      MINIMAX_API_KEY: sk-api-S88yW2ZRgzDiwfadmQ1pDMhFMIlhtwZYZ8f8vGE31vU3Mbx5AVMxe5gLbHogX47gM0RxnkeiEX2_LEqplm4_woMxO2oFHOI5oN_t2vFArW6__ZgJtB8sws8
+      MINIMAX_GROUP_ID: "2053486809635107724"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to OPENCLAW
-        env:
-          SSH_PASS: ${{ secrets.OPENCLAW_ROOT_PASSWORD }}
-          HOST: 135.181.32.65
+      - name: Install sshpass + rsync
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass rsync
+
+      - name: Wait for SSH
         run: |
-          sudo apt-get install -y sshpass
-          
-          # Crea directory e copia file
-          sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no root@$HOST "mkdir -p /opt/audiobook"
-          
-          # Rsync del codice (escludi storage pesante)
-          sshpass -p "$SSH_PASS" rsync -az --exclude='.git' --exclude='storage/audio' \
-            -e "sshpass -p $SSH_PASS ssh -o StrictHostKeyChecking=no" \
+          for i in {1..10}; do
+            if sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@$HOST "echo ok"; then
+              echo "SSH OK"
+              break
+            fi
+            echo "SSH attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+
+      - name: Prepare server directory
+        run: |
+          sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no root@$HOST "mkdir -p /opt/audiobook/storage/audio /opt/audiobook/storage/pdfs /opt/audiobook/storage/reference /opt/audiobook/data"
+
+      - name: Sync code to server
+        run: |
+          export SSHPASS="$SSH_PASS"
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='storage/audio' \
+            --exclude='storage/pdfs' \
+            --exclude='storage/test_audio' \
+            --exclude='.env' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.venv' \
+            --exclude='node_modules' \
+            -e "sshpass -e ssh -o StrictHostKeyChecking=no" \
             ./ root@$HOST:/opt/audiobook/
-          
-          # Copia .env se non esiste già
+
+      - name: Write .env on server
+        run: |
+          sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no root@$HOST "cat > /opt/audiobook/.env" <<EOF
+          APP_PASSWORD=${APP_PASSWORD}
+          JWT_SECRET=${JWT_SECRET}
+          JWT_EXPIRY_HOURS=720
+          MINIMAX_API_KEY=${MINIMAX_API_KEY}
+          MINIMAX_GROUP_ID=${MINIMAX_GROUP_ID}
+          MINIMAX_MODEL=speech-02-hd
+          MINIMAX_DEFAULT_VOICE_ID=narratore_rai
+          STORAGE_PATH=/app/storage
+          DATA_PATH=/app/data
+          REDIS_URL=redis://redis:6379/0
+          DOMAIN=135.181.32.65
+          MAX_PDF_SIZE_MB=200
+          MAX_CHAPTER_CHARS=50000
+          EOF
+
+      - name: Install Docker if missing
+        run: |
           sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no root@$HOST "
-            cd /opt/audiobook
-            
-            # Installa dipendenze se necessario
-            which docker || (curl -fsSL https://get.docker.com | sh)
-            which docker-compose || apt-get install -y docker-compose-plugin
-            
-            # Avvia servizi
-            docker compose up -d --build
-            
-            echo 'Deploy completato!'
-            docker compose ps
+            if ! command -v docker >/dev/null 2>&1; then
+              echo 'Installing Docker...'
+              curl -fsSL https://get.docker.com | sh
+            else
+              echo 'Docker already installed:' \$(docker --version)
+            fi
           "
+
+      - name: Build and start services
+        run: |
+          sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no root@$HOST "
+            set -e
+            cd /opt/audiobook
+            docker compose -f docker-compose.server.yml down 2>/dev/null || true
+            docker compose -f docker-compose.server.yml up -d --build
+            echo '=== Container status ==='
+            docker compose -f docker-compose.server.yml ps
+          "
+
+      - name: Health check
+        run: |
+          sleep 8
+          for i in {1..6}; do
+            if curl -sS -o /dev/null -w '%{http_code}' --max-time 10 http://$HOST/ | grep -qE '^(200|302|303|307|308)$'; then
+              echo "App is responding on http://$HOST"
+              exit 0
+            fi
+            echo "Attempt $i: app not ready yet, waiting 5s..."
+            sleep 5
+          done
+          echo "App did not respond — fetching container logs:"
+          sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no root@$HOST "cd /opt/audiobook && docker compose -f docker-compose.server.yml logs --tail=80"
+          exit 1
