@@ -74,6 +74,15 @@ jobs:
           MAX_CHAPTER_CHARS=50000
           EOF
 
+      - name: Free port 80 (stop system nginx/apache)
+        run: |
+          sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no root@$HOST "
+            systemctl stop nginx 2>/dev/null && systemctl disable nginx 2>/dev/null && echo 'nginx stopped' || true
+            systemctl stop apache2 2>/dev/null && systemctl disable apache2 2>/dev/null && echo 'apache stopped' || true
+            # Verify nothing is on port 80
+            ss -tlnp | grep ':80 ' || echo 'port 80 is free'
+          "
+
       - name: Install Docker if missing
         run: |
           sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no root@$HOST "
