@@ -1,0 +1,42 @@
+name: Deploy to Hetzner
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/audiobook-generator-setup-WgvfR]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to OPENCLAW
+        env:
+          SSH_PASS: ${{ secrets.OPENCLAW_ROOT_PASSWORD }}
+          HOST: 135.181.32.65
+        run: |
+          sudo apt-get install -y sshpass
+          
+          # Crea directory e copia file
+          sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no root@$HOST "mkdir -p /opt/audiobook"
+          
+          # Rsync del codice (escludi storage pesante)
+          sshpass -p "$SSH_PASS" rsync -az --exclude='.git' --exclude='storage/audio' \
+            -e "sshpass -p $SSH_PASS ssh -o StrictHostKeyChecking=no" \
+            ./ root@$HOST:/opt/audiobook/
+          
+          # Copia .env se non esiste già
+          sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no root@$HOST "
+            cd /opt/audiobook
+            
+            # Installa dipendenze se necessario
+            which docker || (curl -fsSL https://get.docker.com | sh)
+            which docker-compose || apt-get install -y docker-compose-plugin
+            
+            # Avvia servizi
+            docker compose up -d --build
+            
+            echo 'Deploy completato!'
+            docker compose ps
+          "

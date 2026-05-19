@@ -1,0 +1,31 @@
+version: '3.9'
+
+# Production HTTP server — no TLS, port 80 exposed directly
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: .env
+    ports:
+      - "80:8000"
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data
+      - ./frontend:/app/frontend:ro
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    command: python -m app.workers.worker
+    env_file: .env
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data
+    depends_on:
+      - redis
+    restart: unless-stopped
