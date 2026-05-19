@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 25
     env:
       HOST: 62.238.12.111
-      SSHPASS: "E_arY9vfR]x-"
+      SSHPASS: "6_R^z=i344e/0O[xEszl"
       APP_PASSWORD: audiobook2025
       JWT_SECRET: f2c9f0c3cc4bcca4a3b88b6b9fcc961aa9530de8501df4ffcacc842450d49fad
       MINIMAX_API_KEY: sk-api-S88yW2ZRgzDiwfadmQ1pDMhFMIlhtwZYZ8f8vGE31vU3Mbx5AVMxe5gLbHogX47gM0RxnkeiEX2_LEqplm4_woMxO2oFHOI5oN_t2vFArW6__ZgJtB8sws8
