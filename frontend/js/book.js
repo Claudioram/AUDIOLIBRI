@@ -100,10 +100,25 @@ function _updateProgress(book) {
 
   const done = chapters.filter(c => c.status === 'completed').length;
   const failed = chapters.filter(c => c.status === 'failed').length;
-  const pct = Math.round((done / total) * 100);
+  const remaining = total - done - failed;
+  const pct = Math.round(((done + failed) / total) * 100);
 
   genProgressBar.style.width = `${pct}%`;
-  genProgressLabel.textContent = `${done} di ${total} capitoli${failed ? ` (${failed} errori)` : ''}`;
+
+  // Stima tempo rimanente usando i timestamp generated_at dei capitoli completati
+  let etaText = '';
+  const completed = chapters.filter(c => c.status === 'completed' && c.generated_at);
+  if (completed.length >= 2 && remaining > 0) {
+    const timestamps = completed.map(c => new Date(c.generated_at).getTime()).sort((a,b) => a-b);
+    const elapsed = timestamps[timestamps.length - 1] - timestamps[0]; // ms tra primo e ultimo
+    const avgMs = elapsed / (completed.length - 1);                    // media per capitolo
+    const etaSec = Math.round((avgMs * remaining) / 1000);
+    etaText = ' · ' + _formatDuration(etaSec) + ' rimanenti';
+  } else if (completed.length === 1 && remaining > 0) {
+    etaText = ' · calcolo in corso…';
+  }
+
+  genProgressLabel.textContent = `${done} di ${total} capitoli${failed ? ` (${failed} errori)` : ''}${etaText}`;
   genProgress.style.display = 'block';
 }
 
