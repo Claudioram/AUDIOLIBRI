@@ -1,20 +1,149 @@
-name: Deploy to OPENCLAW (DISABLED)
-
-# DEPLOY DISATTIVATO — il server OPENCLAW (135.181.32.65)
-# ospita il backend di openclaw.ai. Serve una strategia che
-# NON tocchi nginx/Envoy esistenti e usi una porta dedicata.
-#
-# Riabilitare solo dopo aver pianificato la coesistenza con
-# l'infrastruttura esistente del sito.
+name: Deploy to audio-book-generator
 
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/audiobook-generator-setup-WgvfR]
+    paths-ignore:
+      - 'storage/**'
+      - '**.md'
+      - '.github/workflows/**'
 
 jobs:
-  noop:
+  deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HOST: 62.238.12.111
+      SSHPASS: "E_arY9vfR]x-"
+      APP_PASSWORD: audiobook2025
+      JWT_SECRET: f2c9f0c3cc4bcca4a3b88b6b9fcc961aa9530de8501df4ffcacc842450d49fad
+      MINIMAX_API_KEY: sk-api-S88yW2ZRgzDiwfadmQ1pDMhFMIlhtwZYZ8f8vGE31vU3Mbx5AVMxe5gLbHogX47gM0RxnkeiEX2_LEqplm4_woMxO2oFHOI5oN_t2vFArW6__ZgJtB8sws8
+      MINIMAX_GROUP_ID: "2053486809635107724"
     steps:
-      - name: Abort
+      - uses: actions/checkout@v4
+
+      - name: Install sshpass + rsync
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass rsync
+
+      - name: Wait for SSH
         run: |
-          echo "Deploy disattivato per evitare conflitti con openclaw.ai backend"
-          exit 0
+          for i in {1..12}; do
+            if sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=8 root@$HOST "echo ok" 2>/dev/null; then
+              echo "SSH connesso"
+              break
+            fi
+            echo "Tentativo $i fallito, retry in 5s..."
+            sleep 5
+          done
+
+      - name: Inventory server (cosa c'è già)
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=no root@$HOST "
+            echo '=== OS ==='; cat /etc/os-release | head -3
+            echo '=== Docker ==='; docker --version 2>/dev/null || echo 'non installato'
+            echo '=== Porte occupate ==='; ss -tlnp | grep -E ':80|:443|:8000|:6379' || echo 'nessuna'
+            echo '=== /opt/ ==='; ls /opt/ 2>/dev/null || echo 'vuoto'
+          "
+
+      - name: Add SSH public key to authorized_keys
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=no root@$HOST "
+            mkdir -p /root/.ssh
+            grep -qF 'AAAAC3NzaC1lZDI1NTE5AAAAIEWFsC4inZOB1CXSJpr7GH4Co++UnT9Drh3VgNusWvV9' /root/.ssh/authorized_keys 2>/dev/null \
+              || echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEWFsC4inZOB1CXSJpr7GH4Co++UnT9Drh3VgNusWvV9 claude-audiobook' >> /root/.ssh/authorized_keys
+            chmod 600 /root/.ssh/authorized_keys
+            echo 'SSH key aggiunta'
+          "
+
+      - name: Free port 80 if nginx/apache in the way
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=no root@$HOST "
+            systemctl stop nginx 2>/dev/null && systemctl disable nginx 2>/dev/null && echo 'nginx fermato' || true
+            systemctl stop apache2 2>/dev/null && systemctl disable apache2 2>/dev/null && echo 'apache fermato' || true
+            ss -tlnp | grep ':80 ' || echo 'porta 80 libera'
+          "
+
+      - name: Install Docker
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=no root@$HOST "
+            if ! command -v docker >/dev/null 2>&1; then
+              echo 'Installo Docker...'
+              curl -fsSL https://get.docker.com | sh
+              systemctl enable docker
+            else
+              echo 'Docker già presente:' \$(docker --version)
+            fi
+          "
+
+      - name: Prepare directories
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=no root@$HOST "
+            mkdir -p /opt/audiobook/storage/audio \
+                     /opt/audiobook/storage/pdfs \
+                     /opt/audiobook/storage/reference \
+                     /opt/audiobook/data
+          "
+
+      - name: Sync code
+        run: |
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='storage/audio' \
+            --exclude='storage/pdfs' \
+            --exclude='storage/test_audio' \
+            --exclude='.env' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.venv' \
+            -e "sshpass -e ssh -o StrictHostKeyChecking=no" \
+            ./ root@$HOST:/opt/audiobook/
+
+      - name: Write .env
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=no root@$HOST bash -s << 'ENDSSH'
+          cat > /opt/audiobook/.env << ENVEOF
+          APP_PASSWORD=audiobook2025
+          JWT_SECRET=f2c9f0c3cc4bcca4a3b88b6b9fcc961aa9530de8501df4ffcacc842450d49fad
+          JWT_EXPIRY_HOURS=720
+          MINIMAX_API_KEY=sk-api-S88yW2ZRgzDiwfadmQ1pDMhFMIlhtwZYZ8f8vGE31vU3Mbx5AVMxe5gLbHogX47gM0RxnkeiEX2_LEqplm4_woMxO2oFHOI5oN_t2vFArW6__ZgJtB8sws8
+          MINIMAX_GROUP_ID=2053486809635107724
+          MINIMAX_MODEL=speech-02-hd
+          MINIMAX_DEFAULT_VOICE_ID=narratore_rai
+          STORAGE_PATH=/app/storage
+          DATA_PATH=/app/data
+          REDIS_URL=redis://redis:6379/0
+          DOMAIN=62.238.12.111
+          MAX_PDF_SIZE_MB=200
+          MAX_CHAPTER_CHARS=50000
+          ENVEOF
+          echo ".env scritto OK"
+          ENDSSH
+
+      - name: Build and start services
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=no root@$HOST "
+            set -e
+            cd /opt/audiobook
+            docker compose -f docker-compose.server.yml down --remove-orphans 2>/dev/null || true
+            docker compose -f docker-compose.server.yml up -d --build
+            echo '=== Containers ==='
+            docker compose -f docker-compose.server.yml ps
+          "
+
+      - name: Health check
+        run: |
+          echo "Aspetto che l'app parta..."
+          sleep 12
+          for i in {1..8}; do
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 http://$HOST/ 2>/dev/null || echo "000")
+            if echo "$CODE" | grep -qE '^(200|302|303|307|308)$'; then
+              echo "App online! HTTP $CODE — http://$HOST"
+              exit 0
+            fi
+            echo "Tentativo $i: HTTP $CODE, attendo 8s..."
+            sleep 8
+          done
+          echo "App non risponde, log container:"
+          sshpass -e ssh -o StrictHostKeyChecking=no root@$HOST "cd /opt/audiobook && docker compose -f docker-compose.server.yml logs --tail=100"
+          exit 1
