@@ -140,16 +140,8 @@ def _ocr_fallback(doc, pdf_path: Path):
 
 
 def _extract_chapters(doc) -> list[Chapter]:
-    """Try native TOC first, then MiniMax LLM, then font heuristic, then regex."""
-    toc = doc.get_toc()
-
-    if toc:
-        chapters = _chapters_from_toc(doc, toc)
-        if chapters:
-            logger.debug(f"Using native TOC ({len(chapters)} entries)")
-            return chapters
-
-    logger.debug("TOC empty or unusable — trying MiniMax LLM")
+    """Try MiniMax LLM first, then font heuristic, then regex."""
+    logger.debug("Trying MiniMax LLM for chapter detection")
     chapters = _chapters_from_minimax(doc)
     if chapters:
         return chapters
@@ -164,33 +156,42 @@ def _extract_chapters(doc) -> list[Chapter]:
 
 
 def _chapters_from_minimax(doc) -> list[Chapter]:
-    """Ask MiniMax LLM to identify chapter headings from per-page first lines."""
+    """Pass full PDF text to MiniMax LLM for chapter analysis."""
     from app.config import settings
     if not settings.minimax_api_key:
         return []
 
-    # Build a compact per-page summary: page number + first non-empty line
-    page_lines: list[str] = []
+    # Costruisce il testo completo del PDF con marcatori di pagina
+    pages: list[str] = []
     for page_num in range(doc.page_count):
-        lines = [l.strip() for l in doc[page_num].get_text().splitlines() if l.strip()]
-        if lines:
-            page_lines.append(f"{page_num + 1}: {lines[0][:120]}")
+        text = doc[page_num].get_text().strip()
+        if text:
+            pages.append(f"[PAGINA {page_num + 1}]\n{text}")
 
-    if not page_lines:
+    if not pages:
         return []
 
-    pages_text = "\n".join(page_lines)
+    full_text = "\n\n".join(pages)
+
+    # Se il testo supera ~400k caratteri, invia le prime 300 pagine (evita timeout)
+    MAX_CHARS = 400_000
+    if len(full_text) > MAX_CHARS:
+        full_text = full_text[:MAX_CHARS]
+        logger.info(f"PDF text truncated to {MAX_CHARS} chars for MiniMax analysis")
+
     prompt = (
-        "Sei un assistente che analizza la struttura di libri in formato PDF.\n"
-        "Di seguito trovi la prima riga di ogni pagina del documento (formato 'numero_pagina: testo').\n"
-        "Identifica SOLO le pagine che iniziano un capitolo vero (non testatine, numeri di pagina, "
-        "indici, dediche, colophon, copyright, pagine vuote o sottotitoli di sezione).\n"
-        "Rispondi ESCLUSIVAMENTE con un array JSON valido, senza testo aggiuntivo, nel formato:\n"
+        "Analizza il testo completo di questo libro PDF. "
+        "Identifica TUTTI i capitoli veri del libro (non sottosezioni, non pagine di indice, "
+        "non copyright, non dediche, non note a piè di pagina).\n"
+        "Per ogni capitolo indica il titolo esatto e il numero di pagina dove inizia "
+        "(i numeri di pagina sono indicati dai marcatori [PAGINA N]).\n"
+        "Rispondi ESCLUSIVAMENTE con un array JSON valido, senza testo aggiuntivo:\n"
         '[{"titolo": "Nome capitolo", "pagina": N}, ...]\n\n'
-        f"{pages_text}"
+        f"{full_text}"
     )
 
     try:
+        logger.info(f"Sending {len(full_text):,} chars to MiniMax for chapter detection")
         resp = httpx.post(
             "https://api.minimax.io/v1/text/chatcompletion_v2",
             headers={
@@ -201,43 +202,43 @@ def _chapters_from_minimax(doc) -> list[Chapter]:
                 "model": "MiniMax-Text-01",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.1,
-                "max_tokens": 2000,
+                "max_tokens": 4000,
             },
             params={"GroupId": settings.minimax_group_id},
-            timeout=60,
+            timeout=120,
             verify=False,
         )
         resp.raise_for_status()
         data = resp.json()
+        logger.debug(f"MiniMax raw response: {json.dumps(data)[:500]}")
+
         raw = (
             data.get("choices", [{}])[0]
             .get("message", {})
             .get("content", "")
         )
-        logger.debug(f"MiniMax chapter detection raw response: {raw[:300]}")
+        logger.info(f"MiniMax chapter detection response: {raw[:500]}")
 
-        # Estrai il JSON dalla risposta (potrebbe avere testo prima/dopo)
         match = re.search(r"\[.*\]", raw, re.DOTALL)
         if not match:
-            logger.warning("MiniMax response contained no JSON array")
+            logger.warning(f"MiniMax response contained no JSON array: {raw[:200]}")
             return []
 
         entries = json.loads(match.group(0))
         if not isinstance(entries, list) or not entries:
             return []
 
-        # Converti in 0-indexed e filtra fuori range
         validated: list[tuple[str, int]] = []
         for e in entries:
             title = str(e.get("titolo", "")).strip()
-            page = int(e.get("pagina", 0)) - 1  # 0-indexed
+            page = int(e.get("pagina", 0)) - 1  # converti in 0-indexed
             if title and 0 <= page < doc.page_count:
                 validated.append((title, page))
 
         if len(validated) < 2:
+            logger.warning(f"MiniMax returned too few chapters: {len(validated)}")
             return []
 
-        # Deduplicazione per pagina (mantieni prima occorrenza)
         seen: set[int] = set()
         deduped: list[tuple[str, int]] = []
         for title, pg in sorted(validated, key=lambda x: x[1]):
