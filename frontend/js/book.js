@@ -15,12 +15,15 @@ const bookId = new URLSearchParams(window.location.search).get('id');
 if (!bookId) { window.location = '/app.html'; }
 
 // ── DOM refs ─────────────────────────────────────────────────────────────────
-const bookTitle   = document.getElementById('bookTitle');
-const bookMeta    = document.getElementById('bookMeta');
-const generateBtn = document.getElementById('generateBtn');
-const downloadBtn = document.getElementById('downloadBtn');
-const deleteBtn   = document.getElementById('deleteBtn');
-const chapterList = document.getElementById('chapterList');
+const bookTitle       = document.getElementById('bookTitle');
+const bookMeta        = document.getElementById('bookMeta');
+const generateBtn     = document.getElementById('generateBtn');
+const downloadBtn     = document.getElementById('downloadBtn');
+const deleteBtn       = document.getElementById('deleteBtn');
+const chapterList     = document.getElementById('chapterList');
+const genProgress     = document.getElementById('genProgress');
+const genProgressBar  = document.getElementById('genProgressBar');
+const genProgressLabel = document.getElementById('genProgressLabel');
 
 // ── Load book ────────────────────────────────────────────────────────────────
 let _book = null;
@@ -44,6 +47,7 @@ async function loadBook() {
   downloadBtn.style.display = book.status === 'completed' ? 'inline-flex' : 'none';
   downloadBtn.href = `/api/books/${bookId}/m4b`;
 
+  _updateProgress(book);
   _renderChapters(book.chapters || []);
 }
 
@@ -82,6 +86,25 @@ function _renderChapters(chapters) {
 
     chapterList.appendChild(item);
   });
+}
+
+// ── Progress bar ─────────────────────────────────────────────────────────────
+function _updateProgress(book) {
+  if (book.status !== 'generating') {
+    genProgress.style.display = 'none';
+    return;
+  }
+  const chapters = book.chapters || [];
+  const total = chapters.length;
+  if (!total) { genProgress.style.display = 'none'; return; }
+
+  const done = chapters.filter(c => c.status === 'completed').length;
+  const failed = chapters.filter(c => c.status === 'failed').length;
+  const pct = Math.round((done / total) * 100);
+
+  genProgressBar.style.width = `${pct}%`;
+  genProgressLabel.textContent = `${done} di ${total} capitoli${failed ? ` (${failed} errori)` : ''}`;
+  genProgress.style.display = 'block';
 }
 
 // ── Generate ─────────────────────────────────────────────────────────────────

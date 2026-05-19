@@ -33,6 +33,17 @@
         <div class="meta-row" id="bookMeta"></div>
       </div>
 
+      <!-- Generation progress -->
+      <div id="genProgress" style="display:none; margin-bottom:24px">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+          <span style="font-size:0.875rem; font-weight:600">Generazione audio in corso…</span>
+          <span id="genProgressLabel" style="font-size:0.875rem; color:var(--muted)"></span>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-bar" id="genProgressBar" style="width:0%"></div>
+        </div>
+      </div>
+
       <!-- Chapter list -->
       <div id="chapterSection">
         <h2 style="font-size:1rem; font-weight:600; margin-bottom:12px">Capitoli</h2>
