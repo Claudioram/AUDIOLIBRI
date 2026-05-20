@@ -19,6 +19,7 @@ const bookTitle        = document.getElementById('bookTitle');
 const editTitleBtn     = document.getElementById('editTitleBtn');
 const bookMeta         = document.getElementById('bookMeta');
 const generateBtn      = document.getElementById('generateBtn');
+const assembleBtn      = document.getElementById('assembleBtn');
 const downloadBtn      = document.getElementById('downloadBtn');
 const deleteBtn        = document.getElementById('deleteBtn');
 const chapterList      = document.getElementById('chapterList');
@@ -45,7 +46,9 @@ async function loadBook() {
   `;
 
   generateBtn.style.display = book.status === 'ready_to_generate' ? 'inline-flex' : 'none';
-  downloadBtn.style.display = book.status === 'completed' ? 'inline-flex' : 'none';
+  assembleBtn.style.display = book.status === 'completed' ? 'inline-flex' : 'none';
+  const m4bExists = book.m4b_available;
+  downloadBtn.style.display = m4bExists ? 'inline-flex' : 'none';
   downloadBtn.href = `/api/books/${bookId}/m4b`;
 
   _updateProgress(book);
@@ -160,6 +163,21 @@ editTitleBtn.addEventListener('click', () => {
     if (e.key === 'Escape') { input.value = current; _save(); }
   });
   input.addEventListener('blur', _save);
+});
+
+// ── Assemble M4B ─────────────────────────────────────────────────────────────
+assembleBtn.addEventListener('click', async () => {
+  assembleBtn.disabled = true;
+  assembleBtn.textContent = 'Avvio…';
+  try {
+    await api(`/api/books/${bookId}/assemble`, { method: 'POST' });
+    assembleBtn.style.display = 'none';
+    await loadBook();
+  } catch (err) {
+    alert(`Errore: ${err.message}`);
+    assembleBtn.disabled = false;
+    assembleBtn.textContent = 'Crea M4B';
+  }
 });
 
 // ── Generate ─────────────────────────────────────────────────────────────────

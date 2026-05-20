@@ -103,7 +103,9 @@ def get_book(
     book = session.get(Book, book_id)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    return BookDetail.model_validate(book)
+    detail = BookDetail.model_validate(book)
+    detail.m4b_available = (settings.m4b_dir / f"{book_id}.m4b").exists()
+    return detail
 
 
 @router.patch("/{book_id}", response_model=BookRead)
@@ -251,6 +253,48 @@ def regenerate_chapter(
         r = redis_lib.from_url(settings.redis_url)
         q = RQQueue(connection=r)
         q.enqueue(generate_chapter_job, chapter_id, job_timeout=3600)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to enqueue job: {exc}")
+
+    return {"ok": True}
+
+
+@router.post("/{book_id}/assemble")
+def assemble_book(
+    book_id: str,
+    session: Session = Depends(get_session),
+    user: dict = Depends(get_current_user),
+) -> dict:
+    book = session.get(Book, book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    chapters = session.exec(
+        select(Chapter)
+        .where(Chapter.book_id == book_id, Chapter.status == ChapterStatus.completed)
+    ).all()
+    if not chapters:
+        raise HTTPException(status_code=400, detail="No completed chapters to assemble")
+
+    book.status = BookStatus.generating
+    book.error_message = None
+    # Rimuovi vecchi job di assemblaggio
+    old_jobs = session.exec(
+        select(Job).where(Job.book_id == book_id, Job.type == JobType.assemble_m4b)
+    ).all()
+    for j in old_jobs:
+        session.delete(j)
+    new_job = Job(book_id=book_id, type=JobType.assemble_m4b, status=JobStatus.queued)
+    session.add(new_job)
+    session.commit()
+
+    try:
+        import redis as redis_lib
+        from rq import Queue as RQQueue
+        from app.workers.jobs import assemble_m4b_job
+        r = redis_lib.from_url(settings.redis_url)
+        q = RQQueue(connection=r)
+        q.enqueue(assemble_m4b_job, book_id, job_timeout=7200)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to enqueue job: {exc}")
 

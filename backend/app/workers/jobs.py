@@ -132,8 +132,8 @@ def generate_chapter_job(chapter_id: str) -> None:
 
         logger.info(f"Chapter {order} generated: {mastered_mp3.name} ({duration:.1f}s)")
 
-        # Check if all chapters are done → enqueue M4B assembly
-        _maybe_enqueue_assemble(book_id)
+        # Check if all chapters are done → mark book as completed
+        _maybe_complete_book(book_id)
 
     except Exception as exc:
         logger.exception(f"generate_chapter_job failed for chapter {chapter_id}: {exc}")
@@ -254,22 +254,18 @@ def _mark_job_done(
         session.commit()
 
 
-def _maybe_enqueue_assemble(book_id: str) -> None:
-    """Enqueue assemble_m4b_job if all chapters are completed."""
+def _maybe_complete_book(book_id: str) -> None:
+    """Mark book as completed when all chapters are done."""
     with _get_session() as session:
         chapters = session.exec(
             select(Chapter).where(Chapter.book_id == book_id)
         ).all()
-
         if not chapters:
             return
         if all(ch.status == ChapterStatus.completed for ch in chapters):
-            try:
-                import redis as redis_lib
-                from rq import Queue as RQQueue
-                r = redis_lib.from_url(settings.redis_url)
-                q = RQQueue(connection=r)
-                q.enqueue(assemble_m4b_job, book_id, job_timeout=1800)
-                logger.info(f"Enqueued assemble_m4b_job for book {book_id}")
-            except Exception as exc:
-                logger.error(f"Failed to enqueue assemble job: {exc}")
+            book = session.get(Book, book_id)
+            if book:
+                book.status = BookStatus.completed
+                book.error_message = None
+                session.commit()
+                logger.info(f"Book {book_id} marked as completed")

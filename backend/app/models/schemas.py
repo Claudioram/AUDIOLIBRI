@@ -27,6 +27,7 @@ class BookRead(BaseModel):
     status: BookStatus
     created_at: datetime
     error_message: Optional[str]
+    m4b_available: bool = False
 
     model_config = {"from_attributes": True}
 
